@@ -3,6 +3,7 @@ import sys
 from sys import stderr
 import argparse
 import xml.etree.ElementTree as ET
+import opcodes
 
 # dictionary of number of arguments for each instruction
 instructionNumOfArguments = {
@@ -62,13 +63,16 @@ class instruction:
         self.opcode = opcode
     def add_arg(self, arg_type, arg_value):
         self.args.append(arg(arg_type, arg_value))
-        
 
-#TODO najst help xd
-parser = argparse.ArgumentParser()
-parser.add_argument("--source", metavar="file", help="input file with XML representation of source code")
-parser.add_argument("--input", metavar="file", help="input file with inputs for program")
-args = parser.parse_args()
+ 
+# main function (som ani nevedel, ze to je treba xd)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--source", "-s", metavar="file")
+    parser.add_argument("--input", "-i", metavar="file")
+    args = parser.parse_args()
+           
+
 
 # If there is no argument, show help
 if not any(vars(args).values()):
@@ -83,6 +87,7 @@ try:
     else:
         source_code = sys.stdin.read()
 except OSError as e:
+    sys.stderr.write("Something went wrong with trying to reach input file\n")
     sys.exit(11)
 
 # Read inputs from input file or standard input
@@ -93,31 +98,48 @@ try:
     else:
         inputs = sys.stdin.read().splitlines()
 except OSError as e:
+    sys.stderr.write("Something went wrong with trying to reach input file\n")
     sys.exit(11)
     
 try:
     tree = ET.fromstring(source_code)
 except ET.ParseError:
+    sys.stderr.write("Program does not start with 'program' header \n")
     sys.exit(31)
     
 # XML load
+tree = ET.fromstring(source_code)
+
+# XML load
 root = tree
 
-# XML check and parse
+    # XML check and parse
 if root.tag != "program":
+    sys.stderr.write("Missing 'program' tag\n")
     sys.exit(31)
+        
+if not ("language" in root.attrib.keys() and root.attrib['language'] == "IPPcode23"):
+    sys.stderr.write("Wrong language. Must be IPPcode23\n")
+    sys.exit(32)
 
-for child in root:
+order = 1
+for child in sorted(root, key=lambda c: int(c.attrib['order'])):
     if child.tag != "instruction":
+        sys.stderr.write("Missing 'instruction'\n")
         sys.exit(31)
     keysList = list(child.attrib.keys())
     if not ("order" in keysList and "opcode" in keysList):
         sys.exit(31)
+    if int(child.attrib['order']) != order:
+        sys.stderr.write("Missing 'order' line\n")
+        sys.exit(31)
     for subelem in child:
         if not (re.match(r'^arg[1-3]+$', subelem.tag)):
+            sys.stderr.write("Wrong number in order\n")
             sys.exit(31)
         else:
             print(subelem.tag)
+    order += 1
 
 # everything is correct
 sys.exit(0)
