@@ -3,13 +3,12 @@ import sys
 from sys import stderr
 import argparse
 import xml.etree.ElementTree as ET
-import opcodes
 
 # dictionary of number of arguments for each instruction
 instructionNumOfArguments = {
     0 : ('CREATEFRAME', 'PUSHFRAME', 'POPFRAME', 'RETURN', 'BREAK'),
-    1 : ('DEFVAR', 'POPS', 'CALL', 'LABEL', 'JUMP', 'PUSHS', 'WRITE', 'EXIT', 'DPRINT'),
-    2 : ('MOVE', 'INT2CHAR', 'STRLEN', 'TYPE', 'READ',  'NOT'),
+    1 : ('DEFVAR', 'POPS', 'CALL', 'LABEL', 'JUMP', 'PUSHS', 'WRITE', 'EXIT', 'DPRINT',  'NOT'),
+    2 : ('MOVE', 'INT2CHAR', 'STRLEN', 'TYPE', 'READ'),
     3 : ('ADD', 'SUB', 'MUL', 'IDIV', 'LT', 'GT', 'EQ', 'JUMPIFEQ', 'JUMPIFNEQ', 'OR', 'AND', 'STRI2INT', 'CONCAT', 'GETCHAR', 'SETCHAR')
 }
 
@@ -52,27 +51,67 @@ instructionTypes = {
     'SETCHAR'     :  ['VAR', 'SYMB', 'SYMB'],
 }
 
-class arg:
+class Argument:
     def __init__(self, arg_type, arg_value):
         self.arg_type = arg_type
         self.arg_value = arg_value
+    
+    def checkArgumentsType(self, typ):
+        if typ == self.arg_type or typ == 'VAR':
+            pass
+        elif typ == "SYMB" and self.arg_type in ('VAR', 'INT', 'STRING', 'BOOL', 'NIL'):
+            pass
+        elif typ == "TYPE" and self.arg_type in ("int", "string", "bool"):
+            pass
+        elif typ == 'LABEL' and self.arg_type == 'LABEL':
+            pass
+        else:
+            exit(53)
 
-class instruction:
-    def __init__(self, order, opcode):
-        self.order = order
+# define the Instruction class
+class Instruction:
+    def __init__(self, opcode, arguments, num):
         self.opcode = opcode
-    def add_arg(self, arg_type, arg_value):
-        self.args.append(arg(arg_type, arg_value))
+        self.num = num
+        self.type: str
 
- 
+        self.checkOpcode()
+
+        self.arg_types = instructionTypes[self.opcode]
+        
+        self.checkArg()
+                
+        self.arg1 = Argument(self.arg_types[0], None) if num > 0 else None
+        self.arg2 = Argument(self.arg_types[1], None) if num > 1 else None
+        self.arg3 = Argument(self.arg_types[2], None) if num > 2 else None
+    
+        if self.arg1: self.arg1.checkArgumentsType(self.arg1.arg_type)
+        if self.arg2: self.arg2.checkArgumentsType(self.arg2.arg_type)
+        if self.arg3: self.arg3.checkArgumentsType(self.arg3.arg_type)
+        print(self.arg1)
+        print(self.arg2)
+        print(self.arg3)
+
+    def checkOpcode(self):
+        if not self.opcode in instructionTypes:
+           sys.stderr.write("Invalid opcode \n")
+           sys.exit(32) #TODO check if this is correct exit code
+           
+    def checkArg(self):
+            if not self.opcode in instructionNumOfArguments[self.num]:
+                sys.stderr.write("Invalid number of arguments \n")
+                sys.exit(32)
+    
+    def getOpcode(self):
+        return self.opcode
+    
+            
 # main function (som ani nevedel, ze to je treba xd)
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", "-s", metavar="file")
     parser.add_argument("--input", "-i", metavar="file")
     args = parser.parse_args()
-           
-
 
 # If there is no argument, show help
 if not any(vars(args).values()):
@@ -137,10 +176,11 @@ for child in sorted(root, key=lambda c: int(c.attrib['order'])):
         if not (re.match(r'^arg[1-3]+$', subelem.tag)):
             sys.stderr.write("Wrong number in order\n")
             sys.exit(31)
-        else:
-            print(subelem.tag)
-    order += 1
 
+    order += 1
+    
+instruction = Instruction("ADD", 3)
+  
 # everything is correct
 sys.exit(0)
         
