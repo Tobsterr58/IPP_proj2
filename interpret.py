@@ -4,6 +4,16 @@ from sys import stderr
 import argparse
 import xml.etree.ElementTree as ET
 
+# important variables
+whileCount = 0
+LfCount = 0
+TfCreated = False
+TfExists = False
+EOF = False
+Stack = []
+LfStack = [] 
+labels = {} # dictionary of labels 
+
 # dictionary of number of arguments for each instruction
 instructionNumOfArguments = {
     0 : ('CREATEFRAME', 'PUSHFRAME', 'POPFRAME', 'RETURN', 'BREAK'),
@@ -51,6 +61,24 @@ instructionTypes = {
     'SETCHAR'     :  ['VAR', 'SYMB', 'SYMB'],
 }
 
+        
+class Execute:
+    def __init__(self, input_file):
+        self.root = ET.parse(input_file).getroot()
+        self.input_file = input_file
+    
+        self.findLabels()
+    
+    def findLabels(self):
+        counter = 1 # counter of instructions where label is
+        for ins in self.root:
+            if ins.get('opcode') == 'LABEL':
+                if ins[0].text in labels:
+                    sys.stderr.write("Label already exists \n")
+                    sys.exit(52)
+                labels[ins[0].text] = counter
+            counter += 1
+
 class Argument:
     def __init__(self, arg_type, arg_value):
         self.arg_type = arg_type
@@ -66,11 +94,12 @@ class Argument:
         elif typ == 'LABEL' and self.arg_type == 'LABEL':
             pass
         else:
-            exit(53)
+            sys.stderr.write("Invalid argument type \n")
+            sys.exit(53)
 
 # define the Instruction class
 class Instruction:
-    def __init__(self, opcode, arguments, num):
+    def __init__(self, opcode, num):
         self.opcode = opcode
         self.num = num
         self.type: str
@@ -88,23 +117,24 @@ class Instruction:
         if self.arg1: self.arg1.checkArgumentsType(self.arg1.arg_type)
         if self.arg2: self.arg2.checkArgumentsType(self.arg2.arg_type)
         if self.arg3: self.arg3.checkArgumentsType(self.arg3.arg_type)
-        print(self.arg1)
-        print(self.arg2)
-        print(self.arg3)
 
     def checkOpcode(self):
         if not self.opcode in instructionTypes:
            sys.stderr.write("Invalid opcode \n")
-           sys.exit(32) #TODO check if this is correct exit code
+           sys.exit(32)
            
     def checkArg(self):
-            if not self.opcode in instructionNumOfArguments[self.num]:
-                sys.stderr.write("Invalid number of arguments \n")
-                sys.exit(32)
+        if not self.opcode in instructionNumOfArguments[self.num]:
+            sys.stderr.write("Invalid number of arguments \n")
+            sys.exit(32)
     
     def getOpcode(self):
         return self.opcode
     
+    
+
+########################### START OF THE INTERPRETER #########################
+
             
 # main function (som ani nevedel, ze to je treba xd)
 if __name__ == "__main__":
@@ -168,18 +198,25 @@ for child in sorted(root, key=lambda c: int(c.attrib['order'])):
         sys.exit(31)
     keysList = list(child.attrib.keys())
     if not ("order" in keysList and "opcode" in keysList):
+        sys.stderr.write("Missing 'order' or 'opcode'\n")
         sys.exit(31)
     if int(child.attrib['order']) != order:
-        sys.stderr.write("Missing 'order' line\n")
-        sys.exit(31)
+        sys.stderr.write("Wrong order number\n")
+        sys.exit(32)
     for subelem in child:
         if not (re.match(r'^arg[1-3]+$', subelem.tag)):
-            sys.stderr.write("Wrong number in order\n")
+            sys.stderr.write("Wrong number in argument\n")
             sys.exit(31)
 
     order += 1
     
+###########################################
+######## EXECUTION OF INSTRUCTIONS ########
+###########################################
+    
+program = Execute(args.source)
 instruction = Instruction("ADD", 3)
+
   
 # everything is correct
 sys.exit(0)
