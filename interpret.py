@@ -12,7 +12,7 @@ instructionNumOfArguments = {
     3 : ('ADD', 'SUB', 'MUL', 'IDIV', 'LT', 'GT', 'EQ', 'JUMPIFEQ', 'JUMPIFNEQ', 'OR', 'AND', 'STRI2INT', 'CONCAT', 'GETCHAR', 'SETCHAR')
 }
 
-# dictionary of instructions and their arguments
+# dictionary of instructions and their argument types
 instructionTypes = {
     'CREATEFRAME' :  [None, None, None],
     'PUSHFRAME'   :  [None, None, None],
@@ -105,8 +105,8 @@ class Argument:
                 var = variableList[self.arg_value]
                 self.arg_type = var[1]
                 self.arg_value = var[0]               
-        self.checkTypeConversion() # TODO
-        self.replaceSequence() # TODO
+        self.checkTypeConversion() # DONE probably
+        self.replaceSequence() # DONE probably
         if self.arg_value is None and opcodes != 'TYPE':
             sys.stderr.write("Invalid argument value \n")
             sys.exit(56)            
@@ -164,13 +164,13 @@ class Instruction:
         
         self.checkArg()
                 
-        self.arg1 = Argument(self.arg_types[0], None) if num > 0 else None
-        self.arg2 = Argument(self.arg_types[1], None) if num > 1 else None
-        self.arg3 = Argument(self.arg_types[2], None) if num > 2 else None
+        self.arg1 = Argument(1, self.arg_types[0], arguments[0].text) if num > 0 else None
+        self.arg2 = Argument(2, self.arg_types[1], arguments[1].text) if num > 1 else None
+        self.arg3 = Argument(3, self.arg_types[2], arguments[2].text) if num > 2 else None
     
-        if self.arg1: self.arg1.checkArgumentsType(self.arg1.arg_type)
-        if self.arg2: self.arg2.checkArgumentsType(self.arg2.arg_type)
-        if self.arg3: self.arg3.checkArgumentsType(self.arg3.arg_type)
+        if self.arg1: self.arg1.checkArguments()
+        if self.arg2: self.arg2.checkArguments()
+        if self.arg3: self.arg3.checkArguments()
 
     def checkOpcode(self):
         if not self.opcode in instructionTypes:
@@ -294,7 +294,6 @@ while True:
     arguments = []
     arguments[:] = sorted(root,key=lambda x: x.tag)
     instruction=Instruction(opcodes, numberOfArgs, arguments)
-    print(instruction.arg_types)
     
     sys.exit(0)
     
