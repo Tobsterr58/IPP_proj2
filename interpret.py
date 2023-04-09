@@ -4,16 +4,6 @@ from sys import stderr
 import argparse
 import xml.etree.ElementTree as ET
 
-# important variables
-whileCount = 0
-LfCount = 0
-TfCreated = False
-TfExists = False
-EOF = False
-Stack = []
-LfStack = [] 
-labels = {} # dictionary of labels 
-
 # dictionary of number of arguments for each instruction
 instructionNumOfArguments = {
     0 : ('CREATEFRAME', 'PUSHFRAME', 'POPFRAME', 'RETURN', 'BREAK'),
@@ -80,7 +70,8 @@ class Execute:
             counter += 1
 
 class Argument:
-    def __init__(self, arg_type, arg_value):
+    def __init__(self, num, arg_type: str, arg_value):
+        self.num = num
         self.arg_type = arg_type
         self.arg_value = arg_value
     
@@ -96,12 +87,34 @@ class Argument:
         else:
             sys.stderr.write("Invalid argument type \n")
             sys.exit(53)
-
+            
+    def checkArguments(self):
+        self.checkArgumentsType(instructionTypes[opcodes][self.num-1])
+        if self.arg_type == 'VAR' and not opcodes == 'DEFVAR':
+            if self.arg_value.startswith('LF') and not LfCount == 0: 
+                sys.stderr.write("LF does not exist \n")
+                sys.exit(55)
+            if self.arg_value.startswith('TF') and not TfExists: 
+                sys.stderr.write("TF does not exist \n")
+                sys.exit(55)
+            if not self.arg_value in variableList:
+                sys.stderr.write("Variable does not exist \n")
+                sys.exit(54)
+            if not self.num == 1:
+                self.arg_value = variableList[self.arg_value].arg_value #mby TODO enum classes
+                self.arg_type = variableList[self.arg_value].arg_type
+        self.checkTypeConversion() # TODO
+        self.replaceSequence() # TODO
+        if self.arg_value == None and opcodes != 'TYPE':
+            sys.stderr.write("Invalid argument value \n")
+            sys.exit(56)
+            
 # define the Instruction class
 class Instruction:
-    def __init__(self, opcode, num):
+    def __init__(self, opcode, num, arguments):
         self.opcode = opcode
         self.num = num
+        self.arguments = arguments
         self.type: str
 
         self.checkOpcode()
@@ -135,6 +148,17 @@ class Instruction:
 
 ########################### START OF THE INTERPRETER #########################
 
+# important variables
+whileCount = 0
+LfCount = 0
+TfCreated = False
+TfExists = False
+EOF = False
+Stack = []
+LfStack = [] 
+labels = {} # dictionary of labels
+sortedByOrder = [] # list of instructions sorted by order 
+variableList = {} # dictionary of variables
             
 # main function (som ani nevedel, ze to je treba xd)
 if __name__ == "__main__":
@@ -191,19 +215,20 @@ if not ("language" in root.attrib.keys() and root.attrib['language'] == "IPPcode
     sys.stderr.write("Wrong language. Must be IPPcode23\n")
     sys.exit(32)
 
-order = 1
-for child in sorted(root, key=lambda c: int(c.attrib['order'])):
-    if child.tag != "instruction":
+order = 1 # maybe move it up
+sortedByOrder [:] = sorted(root, key=lambda c: int(c.attrib['order']))
+for ins in sortedByOrder: #in sorted(root, key=lambda c: int(c.attrib['order'])):
+    if ins.tag != "instruction":
         sys.stderr.write("Missing 'instruction'\n")
         sys.exit(31)
-    keysList = list(child.attrib.keys())
+    keysList = list(ins.attrib.keys())
     if not ("order" in keysList and "opcode" in keysList):
         sys.stderr.write("Missing 'order' or 'opcode'\n")
         sys.exit(31)
-    if int(child.attrib['order']) != order:
+    if int(ins.attrib['order']) != order:
         sys.stderr.write("Wrong order number\n")
         sys.exit(32)
-    for subelem in child:
+    for subelem in ins:
         if not (re.match(r'^arg[1-3]+$', subelem.tag)):
             sys.stderr.write("Wrong number in argument\n")
             sys.exit(31)
@@ -215,9 +240,22 @@ for child in sorted(root, key=lambda c: int(c.attrib['order'])):
 ###########################################
     
 program = Execute(args.source)
-instruction = Instruction("ADD", 3)
 
-  
-# everything is correct
-sys.exit(0)
+while True: 
+    try:
+        root = sortedByOrder[whileCount]
+    except:
+        sys.exit(0)
+
+    TfDict = {} # dictionary of temporary frames
+    opcodes = root.get('opcode').upper() # get opcode
+    numberOfArgs = len(sortedByOrder[whileCount]) # get number of arguments
+    arguments = []
+    arguments[:] = sorted(root,key=lambda x: x.tag)
+    instruction=Instruction(opcodes, numberOfArgs, arguments)
+    print(instruction.arg_types)
+    
+    sys.exit(0)
+    
+
         
