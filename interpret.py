@@ -100,14 +100,55 @@ class Argument:
             if not self.arg_value in variableList:
                 sys.stderr.write("Variable does not exist \n")
                 sys.exit(54)
+            self.varName = self.arg_value
             if not self.num == 1:
-                self.arg_value = variableList[self.arg_value].arg_value #mby TODO enum classes
-                self.arg_type = variableList[self.arg_value].arg_type
+                var = variableList[self.arg_value]
+                self.arg_type = var[1]
+                self.arg_value = var[0]               
         self.checkTypeConversion() # TODO
         self.replaceSequence() # TODO
-        if self.arg_value == None and opcodes != 'TYPE':
+        if self.arg_value is None and opcodes != 'TYPE':
             sys.stderr.write("Invalid argument value \n")
-            sys.exit(56)
+            sys.exit(56)            
+
+    def checkTypeConversion(self):
+        conversion_rules = {
+            'INT': lambda x: int(x),
+            'BOOL': lambda x: self.convert_bool(x),
+            'NIL': lambda x: None
+        }
+        
+        conversion_func = conversion_rules.get(self.arg_type)
+        if conversion_func:
+            try:
+                self.arg_value = conversion_func(self.arg_value)
+            except ValueError:
+                sys.stderr.write("Invalid argument value \n")
+                sys.exit(32)
+        else:
+            return
+
+    def convert_bool(self, arg_value):
+        if arg_value == 'true':
+            return True
+        elif arg_value == 'false':
+            return False
+        else:
+            sys.stderr.write("Invalid argument value \n")
+            sys.exit(32)
+
+        
+    def replaceSequence(self):
+        if self.arg_type == 'STRING' and self.arg_value is None:
+            self.arg_value = ''
+        elif self.arg_type == 'STRING' and self.arg_value != '':
+            tmp = re.findall(r'\\[0-9]{3}', self.arg_value)
+            tmp = [string[1:] for string in tmp]
+            tmp = list(map(int, tmp))
+            for sequence in tmp:
+                to_replace = '\\0' + str(sequence)
+                self.arg_value = self.arg_value.replace(to_replace, chr(sequence))
+            
             
 # define the Instruction class
 class Instruction:
