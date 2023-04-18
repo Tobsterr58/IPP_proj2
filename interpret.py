@@ -7,8 +7,8 @@ import xml.etree.ElementTree as ET
 instructionNumOfArguments = {
     0 : ('CREATEFRAME', 'PUSHFRAME', 'POPFRAME', 'RETURN', 'BREAK'),
     1 : ('DEFVAR', 'POPS', 'CALL', 'LABEL', 'JUMP', 'PUSHS', 'WRITE', 'EXIT', 'DPRINT'),
-    2 : ('MOVE', 'INT2CHAR', 'STRLEN', 'TYPE', 'READ', 'NOT'),
-    3 : ('ADD', 'SUB', 'MUL', 'IDIV', 'LT', 'GT', 'EQ', 'JUMPIFEQ', 'JUMPIFNEQ', 'OR', 'AND', 'STRI2INT', 'CONCAT', 'GETCHAR', 'SETCHAR')
+    2 : ('MOVE', 'INT2CHAR', 'STRLEN', 'TYPE', 'READ', 'NOT', 'FLOAT2INT', 'INT2FLOAT'),
+    3 : ('ADD', 'SUB', 'MUL', 'IDIV', 'DIV', 'LT', 'GT', 'EQ', 'JUMPIFEQ', 'JUMPIFNEQ', 'OR', 'AND', 'STRI2INT', 'CONCAT', 'GETCHAR', 'SETCHAR')
 }
 
 # dictionary of instructions and their argument types
@@ -29,6 +29,8 @@ instructionTypes = {
     'DPRINT'      :  ['SYMB', None, None],
     'MOVE'        :  ['VAR', 'SYMB', None],
     'INT2CHAR'    :  ['VAR', 'SYMB', None],
+    'FLOAT2INT'   :  ['VAR', 'SYMB', None],
+    'INT2FLOAT'   :  ['VAR', 'SYMB', None],
     'STRLEN'      :  ['VAR', 'SYMB', None],
     'TYPE'        :  ['VAR', 'SYMB', None],   
     'NOT'         :  ['VAR', 'SYMB', None], # NOT is spesial case, because it has only 2 arguments
@@ -36,6 +38,7 @@ instructionTypes = {
     'ADD'         :  ['VAR', 'SYMB', 'SYMB'],
     'SUB'         :  ['VAR', 'SYMB', 'SYMB'],
     'MUL'         :  ['VAR', 'SYMB', 'SYMB'],
+    'DIV'         :  ['VAR', 'SYMB', 'SYMB'],
     'IDIV'        :  ['VAR', 'SYMB', 'SYMB'],
     'LT'          :  ['VAR', 'SYMB', 'SYMB'],
     'GT'          :  ['VAR', 'SYMB', 'SYMB'],
@@ -50,13 +53,23 @@ instructionTypes = {
     'SETCHAR'     :  ['VAR', 'SYMB', 'SYMB'],
 }
 
-# function for swapping values in frames
 def swapFrames(first :str, second: str):
+    """
+    Swap values of two frames.
+    The values from the first frame are copied to the second frame
+    """
+    
     for variable in list(variableList.keys()):
             replacedVariable = variable.replace(first, second)
             variableList[replacedVariable] = variableList.pop(variable)
 
 def checkArgumentCorrectness(child):
+    """ 
+    Check if the arguments are correct - 
+    If they are in the right order and if they are in the right format.
+    If not, the program exits with error code 32.
+    """
+    
     args = []
     for subelem in child:
         if not re.match(r'^arg[1-3]$', subelem.tag):
@@ -76,6 +89,10 @@ def checkArgumentCorrectness(child):
         sys.exit(32)
                        
 class Labels:
+    """
+    Class for checking and writing labels.
+    It call function findLabels() in the constructor.
+    """
     def __init__(self, input_file):
         self.root = ET.parse(input_file).getroot()
         self.input_file = input_file
@@ -83,8 +100,13 @@ class Labels:
         self.findLabels()
     
     def findLabels(self):
+        """
+        Check if the label is already defined and if opcode is LABEL.
+        If not, it adds it to the dictionary.
+        And if it is, the program exits with error code 52.
+        """
         counter = 0 # counter of instructions where label is
-        for ins in self.root:
+        for ins in sortedByOrder:
             if ins.get('opcode') == 'LABEL':
                 if ins[0].text in labels:
                     sys.stderr.write("Label already exists \n")
@@ -93,17 +115,24 @@ class Labels:
             counter += 1
 
 class Argument:
+    """
+    Class for checking arguments.
+    """
     def __init__(self, num, arg_type: str, arg_value):
         self.num = num
         self.arg_type = arg_type
         self.arg_value = arg_value
     
     def checkArgumentsType(self, arg_type):
+        """
+        Check if the argument type is correct.
+        If not, the program exits with error code 32 (for READ) or 53.
+        """
         if arg_type == self.arg_type or arg_type == 'VAR':
             pass
-        elif arg_type == "SYMB" and self.arg_type in ('VAR', 'INT', 'STRING', 'BOOL', 'NIL'):
+        elif arg_type == "SYMB" and self.arg_type in ('VAR', 'INT', 'STRING', 'BOOL', 'NIL', 'FLOAT'):
             pass
-        elif arg_type == "TYPE" and self.arg_type in ('int', 'string', 'bool'):
+        elif arg_type == "TYPE" and self.arg_type in ('int', 'string', 'bool', 'float'):
             pass
         elif arg_type == "LABEL" and self.arg_type == 'LABEL':
             pass
@@ -115,6 +144,11 @@ class Argument:
                 sys.exit(53)
             
     def checkArguments(self):
+        """
+        Checks arguments and if they are correct, 
+        also checks if the variable is defined or if frames exist.
+        After eveything passed it calls function checkTypeConversion() and replaceSequence().
+        """
         self.checkArgumentsType(instructionTypes[opcodes][self.num-1])
         if self.arg_type == 'VAR' and not opcodes == 'DEFVAR':
             if self.arg_value.startswith('LF') and LfCount == 0: 
@@ -138,8 +172,14 @@ class Argument:
             sys.exit(53)            
 
     def checkTypeConversion(self):
+        """
+        Function for converting types.
+        Special function for converting bool
+        and also for converting float.
+        """
         conversion_rules = {
             'INT': lambda x: int(x),
+            'FLOAT': lambda x: self.convert_float(str(x)),
             'BOOL': lambda x: self.convert_bool(x),
             'NIL': lambda x: 'nil'
         }
@@ -149,7 +189,6 @@ class Argument:
             try:
                 self.arg_value = conversion_func(self.arg_value)
             except ValueError:
-                #print("Som tu")
                 sys.stderr.write("Invalid argument value \n")
                 sys.exit(32)
         else:
@@ -163,18 +202,29 @@ class Argument:
         else:
             sys.stderr.write("Invalid argument value \n")
             sys.exit(53)
+            
+    def convert_float(self, arg_value):
+        if type(arg_value) == float:
+            return arg_value
+        try:
+            return float.fromhex(arg_value)
+        except ValueError:
+            sys.stderr.write("Invalid argument value \n")
+            sys.exit(53)
 
         
     def replaceSequence(self):
+        """
+        This function replaces the sequence of ASCII value to character
+        It check if the argument type is STRING and if the argument value is not empty.
+        Then it finds all sequences of ASCII values with regex and replaces it with character.
+        """
         if self.arg_type == 'STRING' and self.arg_value is None:
             self.arg_value = ''
         elif self.arg_type == 'STRING' and self.arg_value != '':
             tmp = re.findall(r'\\[0-9]{3}', self.arg_value)
-            tmp = [string[1:] for string in tmp]
-            tmp = list(map(int, tmp))
             for sequence in tmp:
-                to_replace = '\\0' + str(sequence)
-                self.arg_value = self.arg_value.replace(to_replace, chr(sequence))
+                self.arg_value = self.arg_value.replace(sequence, chr(int(sequence[1:])))
      
     # getters to get the argument type and value anytime for instruction in While loop          
     def getType(self):
@@ -196,21 +246,29 @@ class Instruction:
         self.arg_types = instructionTypes[self.opcode]
         
         self.checkArg()
-                
+         
+        # create arguments       
         self.arg1 = Argument(1, (arguments[0].get('type')).upper(), arguments[0].text) if num > 0 else None
         self.arg2 = Argument(2, (arguments[1].get('type')).upper(), arguments[1].text) if num > 1 else None
         self.arg3 = Argument(3, (arguments[2].get('type')).upper(), arguments[2].text) if num > 2 else None
     
+        # check arguments if they are correct
         if self.arg1: self.arg1.checkArguments()
         if self.arg2: self.arg2.checkArguments()
         if self.arg3: self.arg3.checkArguments()
 
     def checkOpcode(self):
+        """
+        Check if opcode is in instructionTypes dictionary.
+        """
         if not self.opcode in instructionTypes:
            sys.stderr.write("Invalid opcode \n")
            sys.exit(32)
            
     def checkArg(self):
+        """
+        Check if the number of arguments is the same as in instructionTypes dictionary.
+        """
         if not self.opcode in instructionNumOfArguments[self.num]:
             sys.stderr.write("Invalid number of arguments \n")
             sys.exit(32)
@@ -223,17 +281,16 @@ class Instruction:
 ########################### START OF THE INTERPRETER #########################
 
 # important variables
-instNumToExecute = 0
-LfCount = 0
-TfCreated = False
-TfExists = False
+instrNumToBeExecuted = 0 # number of instruction that will be executed
+LfCount = 0 # number of local frames created
+TfCreated = False # if TF was created
+TfExists = False # if TF exists
 EOF = False
 Stack = [] # normal stack for stack instructions
 LfStack = [] # stack of local frames (that cant be used)
 labels = {} # dictionary of labels
 callList = [] # stack for CALL and RETURN instructions
 orderList = [] # list of numbers in order
-
 sortedByOrder = [] # list of instructions sorted by order 
 variableList = {} # dictionary of variables
             
@@ -280,26 +337,30 @@ except ET.ParseError:
 tree = ET.fromstring(source_code)
 root = tree
 
-    # XML check and parse
+# XML check and parse
 if root.tag != "program":
     sys.stderr.write("Missing 'program' tag\n")
     sys.exit(32)
         
-if not ("language" in root.attrib.keys() and root.attrib['language'] == "IPPcode23"):
+if not ("language" in root.attrib.keys() and root.attrib['language'] == "IPPcode23"): # check if language is IPPcode23
     sys.stderr.write("Wrong language. Must be IPPcode23\n")
     sys.exit(32)
-    
+
+# check if there is any instruction    
 for child in root: 
     if child.tag != "instruction":
         sys.stderr.write("Missing 'instruction'\n")
         sys.exit(32)
     keysList = list(child.attrib.keys())
+    # check if there is order and opcode
     if not ("order" in keysList and "opcode" in keysList):
         sys.stderr.write("Missing 'order' or 'opcode'\n")
         sys.exit(32)
     
+    #Call checkArgumentCorrectness function to check if the arguments are correct
     checkArgumentCorrectness(child)
     
+    # check if order is a number and if it is unique and greater than 0
     if not child.attrib['order'].isdigit():
         sys.stderr.write("Order number is not a number\n")
         sys.exit(32)
@@ -311,29 +372,31 @@ for child in root:
         sys.exit(32)
     orderList.append(int(child.attrib['order']))
    
-#After XML check, sort the instructions by order    
+#After XML check, sort the instructions by order
 sortedByOrder [:] = sorted(root, key=lambda c: int(c.attrib['order']))
     
 ###########################################
 ######## EXECUTION OF INSTRUCTIONS ########
 ###########################################
-    
+
+# create labels    
 Labels(args.source)
+
+# main loop
 while True: 
     try:
-        root = sortedByOrder[instNumToExecute]
+        root = sortedByOrder[instrNumToBeExecuted] # store instruction that we are going to look at to root
     except:
-        sys.exit(0)
+        sys.exit(0) # if there is no instruction, exit with 0, everything was all right (success)
     
     TfDict = {} # dictionary of temporary frames
     opcodes = root.get('opcode').upper() # get opcode
-    numberOfArgs = len(sortedByOrder[instNumToExecute]) # get number of arguments
+    numberOfArgs = len(sortedByOrder[instrNumToBeExecuted]) # get number of arguments
     arguments = []
-    arguments[:] = sorted(root,key=lambda x: x.tag)
-    instruction=Instruction(opcodes, numberOfArgs, arguments)
+    arguments[:] = sorted(root,key=lambda x: x.tag) # get arguments and sort them by tag (arg1, arg2, arg3)
+    instruction=Instruction(opcodes, numberOfArgs, arguments) # call Instruction class and store it to instruction variable  
     
-    #print(opcodes)    
-        
+    # get values and types of arguments if they exist    
     if instruction.arg1:
         valueArg1 = instruction.arg1.getValue()
         typeArg1 = instruction.arg1.getType()
@@ -351,7 +414,7 @@ while True:
     # CREATEFRAME
     if opcodes == "CREATEFRAME":
         if TfExists:
-            [variableList.pop(key) for key in list(variableList.keys()) if key.startswith("TF")]
+            [variableList.pop(key) for key in list(variableList.keys()) if key.startswith("TF")] # delete all variables from TF
         TfCreated = True
         TfExists = True
         
@@ -361,14 +424,14 @@ while True:
             sys.stderr.write("[PUSHFRAME] No frame to push\n")
             sys.exit(55)
             
-        LfCount += 1
-        
+        LfCount += 1 # "create" new LF
+         
         for variable in list(variableList.keys()):
             if variable.startswith("LF"):
                 TfDict[variable] = variableList.pop(variable)
         LfStack.append(TfDict)
             
-        swapFrames("TF", "LF")
+        swapFrames("TF", "LF") # swap TF and LF
             
         TfCreated = False
         TfExists = False
@@ -381,7 +444,7 @@ while True:
         if TfExists == True:
             [variableList.pop(key) for key in list(variableList.keys()) if key.startswith("TF")]
         
-        swapFrames("LF", "TF")
+        swapFrames("LF", "TF") # swap LF and TF
         
         variableList.update(LfStack.pop())
         LfCount -= 1
@@ -394,7 +457,7 @@ while True:
             sys.stderr.write("[RETURN] No frame to return\n")
             sys.exit(56)
         else:
-            instNumToExecute = callList.pop()
+            instrNumToBeExecuted = callList.pop() # get instruction number from callList and store it to instrNumToBeExecuted
          
     
     # BREAK  
@@ -408,9 +471,9 @@ while True:
         if valueArg1 in variableList:
             sys.stderr.write("[DEFVAR] Variable already exists\n")
             sys.exit(52)
-        if valueArg1.startswith("TF") and TfExists:
+        if valueArg1.startswith("TF") and TfExists: # check if frame exists and if variable is in the right frame
             variableList[valueArg1] = [None, None]
-        elif valueArg1.startswith("LF") and not LfCount == 0:
+        elif valueArg1.startswith("LF") and not LfCount == 0: # check if frame exists and if variable is in the right frame
             variableList[valueArg1] = [None, None]
         elif valueArg1.startswith("GF"):
             variableList[valueArg1] = [None, None]
@@ -424,7 +487,7 @@ while True:
             sys.stderr.write("[POPS] No data to pop\n")
             sys.exit(56)
         else:
-            popped = Stack.pop()
+            popped = Stack.pop() # get value and type from stack
             variableList [valueArg1][0] = popped[0]
             variableList [valueArg1][1] = popped[1]
             
@@ -434,8 +497,8 @@ while True:
             sys.stderr.write("[CALL] Label does not exist\n")
             sys.exit(52)
         else:
-            callList.append(instNumToExecute)
-            instNumToExecute = labels[valueArg1]
+            callList.append(instrNumToBeExecuted) # store instruction number to callList
+            instrNumToBeExecuted = labels[valueArg1] # get instruction number from labels and store it to instrNumToBeExecuted
             
     # LABEL
     # Already done in Labels function
@@ -445,7 +508,7 @@ while True:
         if not valueArg1 in labels:
             sys.stderr.write("[JUMP] Label does not exist\n")
             sys.exit(52)
-        instNumToExecute = labels[valueArg1]
+        instrNumToBeExecuted = labels[valueArg1] # get instruction number from labels and store it to instrNumToBeExecuted so we do the JUMP and continue from point where we jumped
 
     # PUSHS
     elif opcodes == "PUSHS" :
@@ -454,24 +517,29 @@ while True:
             if valueArg1 == None:
                 sys.stderr.write("[PUSHS] Argument value can not be undefined\n")
                 sys.exit(56)
-            Stack.append([valueArg1, typeArg1])
+            Stack.append([valueArg1, typeArg1]) # store value and type to stack if type is VAR
         else:
-            Stack.append([valueArg1, typeArg1]) 
+            Stack.append([valueArg1, typeArg1]) # store value and type to stack
             
     # WRITE
     elif opcodes == "WRITE":
-        value = str(valueArg1)
-        type = str(typeArg1)
+        value = valueArg1 # store value to value variable
+        type = typeArg1 # store type to type variable
         if typeArg1 == "VAR":
             if variableList[valueArg1][0] == None:
                 sys.stderr.write("[WRITE] Argument value can not be undefined\n")
                 sys.exit(56)
-            value = str(variableList[valueArg1][0])
-            type = str(variableList[valueArg1][1])
-        if value == "False":
+            value = variableList[valueArg1][0] # store value to value variable if type is VAR
+            type = variableList[valueArg1][1] # store type to type variable if type is VAR
+    # else we will work with value and type from arguments
+        if type == "FLOAT":
+            value = float.hex(value)
+        elif type == "INT":
+            value = int(value)
+        elif value == "False" or value == False:
             value = 'false'
-        elif value == "True":
-            value = 'true'
+        elif value == "True" or value == True:
+            value = 'true' 
         elif value == "nil":
             if type == "STRING":
                 value = 'nil'
@@ -503,7 +571,7 @@ while True:
         if valueArg1 == None:
             sys.stderr.write("Argument can not be undefined\n")
             sys.exit(56)
-        print(valueArg1, file=sys.stderr)
+        print(valueArg1, file=sys.stderr) # print to stderr
     
 ### Instructions with 2 arguments ###
 
@@ -522,20 +590,38 @@ while True:
             sys.exit(58)
         variableList[valueArg1][0] = chr(valueArg2)
         variableList[valueArg1][1] = 'STRING'
+
+    # INT2FLOAT    
+    elif opcodes == "INT2FLOAT":
+        if typeArg1 != "INT":
+            sys.stderr.write("Wrong type of argument\n")
+            sys.exit(53)
+        if not 0 < valueArg1 < 256:
+            sys.stderr.write("Wrong value of argument\n")
+            sys.exit(58)
+        variableList[valueArg1][0] = float.hex(valueArg2)
+        variableList[valueArg1][1] = 'FLOAT'
         
+    # FLOAT2INT
+    elif opcodes == "FLOAT2INT":
+        if typeArg2 != "FLOAT":
+            sys.stderr.write("Wrong type of argument\n")
+            sys.exit(53)
+        variableList[valueArg1][0] = int(valueArg2)
+        variableList[valueArg1][1] = 'INT'        
             
     # STRLEN
     elif opcodes == "STRLEN":
         if typeArg2 != "STRING":
             sys.stderr.write("Wrong type of argument\n")
             sys.exit(53)
-        variableList[valueArg1][0] = len(valueArg2)
+        variableList[valueArg1][0] = len(valueArg2) # store length of string to variable
         variableList[valueArg1][1] = 'INT'
         
     # TYPE
     elif opcodes == "TYPE":
         if typeArg2 in ["INT", "STRING", "BOOL", "NIL"]:
-            variableList[valueArg1][0] = typeArg2.lower()
+            variableList[valueArg1][0] = typeArg2.lower() # store type of argument to variable in lower case
             variableList[valueArg1][1] = 'STRING'
         else:
             variableList[valueArg1][0] = ''
@@ -577,15 +663,22 @@ while True:
         
     # READ
     elif opcodes == "READ":
-        typeArg2 = (arguments[1].text).upper()
-        inputValue = inputs.readline()
-        if not inputValue: EOF = True
+        typeArg2 = (arguments[1].text).upper() # get type of variable from XML
+        inputValue = inputs.readline() # read input from stdin or file (declared earlier)
+        if not inputValue: EOF = True # if inputValue is empty, set EOF to True
         if EOF == False and inputValue[-1] == '\n':
             inputValue = inputValue[:-1]
         if typeArg2 == "INT":
             try:
                 variableList[valueArg1][0] = int(inputValue)
                 variableList[valueArg1][1] = 'INT'
+            except:
+                variableList[valueArg1][0] = 'nil'
+                variableList[valueArg1][1] = 'NIL'
+        elif typeArg2 == "FLOAT":
+            try:
+                variableList[valueArg1][0] = float.fromhex(inputValue)
+                variableList[valueArg1][1] = 'FLOAT'
             except:
                 variableList[valueArg1][0] = 'nil'
                 variableList[valueArg1][1] = 'NIL'
@@ -602,10 +695,13 @@ while True:
         else:
             variableList[valueArg1][0] = 'nil'
             variableList[valueArg1][1] = 'NIL' 
+            
+### Instruction with 3 arguments ###
     
-    # ADD, SUB, MUL, IDIV
-    elif opcodes in ["ADD", "SUB", "MUL", "IDIV"]:
-        if typeArg2 != "INT" or typeArg3 != "INT":
+    # ADD, SUB, MUL, IDIV, DIV
+    elif opcodes in ["ADD", "SUB", "MUL", "IDIV", "DIV"]:
+        # check if types of arguments are correct. Both muste be INT or FLOAT
+        if not ((typeArg2 == "INT" and typeArg3 == "INT") or (typeArg2 == "FLOAT" and typeArg3 == "FLOAT")): 
             sys.stderr.write("Wrong type of argument\n")
             sys.exit(53)
         if opcodes == "ADD":
@@ -616,10 +712,26 @@ while True:
             variableList[valueArg1][0] = valueArg2 * valueArg3
         elif opcodes == "IDIV":
             if valueArg3 == 0:
+                sys.stderr.write("Division by zero\n") # If we try to divide with zero, exit with error code 57
+                sys.exit(57)
+            if typeArg2 == "INT" and typeArg3 == "INT": # if both arguments are INT
+                variableList[valueArg1][0] = valueArg2 // valueArg3
+            else:
+                sys.stderr.write("Wrong type of argument\n")
+                sys.exit(53)
+        elif opcodes == "DIV":
+            if valueArg3 == 0:
                 sys.stderr.write("Division by zero\n")
                 sys.exit(57)
-            variableList[valueArg1][0] = valueArg2 // valueArg3
-        variableList[valueArg1][1] = 'INT'
+            if typeArg2 == "FLOAT" or typeArg3 == "FLOAT":
+                variableList[valueArg1][0] = valueArg2 / valueArg3
+            else:
+                sys.stderr.write("Wrong type of argument\n")
+                sys.exit(53)
+        if typeArg2 == "FLOAT" and typeArg3 == "FLOAT":
+            variableList[valueArg1][1] = 'FLOAT'
+        else:
+            variableList[valueArg1][1] = 'INT'
         
     # LT, GT, EQ
     elif opcodes in ["LT", "GT", "EQ"]:
@@ -660,7 +772,7 @@ while True:
         
     # JUMPIFEQ JUMPIFNEQ
     elif opcodes in ["JUMPIFEQ", "JUMPIFNEQ"]:
-        if not valueArg1 in labels:
+        if not valueArg1 in labels: # if label doesn't exist
             sys.stderr.write("Wrong label\n")
             sys.exit(52)
         if typeArg2 != typeArg3:
@@ -669,10 +781,10 @@ while True:
             else:
                 sys.stderr.write("Wrong type of argument\n")
                 sys.exit(53)
-        if opcodes == "JUMPIFEQ" and valueArg2 == valueArg3:
-            instNumToExecute = labels[valueArg1]
-        if opcodes == "JUMPIFNEQ" and valueArg2 != valueArg3:
-            instNumToExecute = labels[valueArg1]
+        if opcodes == "JUMPIFEQ" and valueArg2 == valueArg3: # if arguments are equal
+            instrNumToBeExecuted = labels[valueArg1]
+        if opcodes == "JUMPIFNEQ" and valueArg2 != valueArg3: # if arguments are not equal
+            instrNumToBeExecuted = labels[valueArg1]
             
     # STRI2INT
     elif opcodes == "STRI2INT":
@@ -682,7 +794,7 @@ while True:
         if valueArg3 < 0 or valueArg3 >= len(valueArg2):
             sys.stderr.write("Wrong index\n")
             sys.exit(58)
-        variableList[valueArg1][0] = ord(valueArg2[valueArg3])
+        variableList[valueArg1][0] = ord(valueArg2[valueArg3]) # ord() returns ASCII code of character
         variableList[valueArg1][1] = 'INT'
         
     # CONCAT
@@ -690,7 +802,7 @@ while True:
         if typeArg2 != "STRING" or typeArg3 != "STRING":
             sys.stderr.write("Wrong type of argument\n")
             sys.exit(53)
-        variableList[valueArg1][0] = valueArg2 + valueArg3
+        variableList[valueArg1][0] = valueArg2 + valueArg3 # concatenation of strings if both arguments are strings
         variableList[valueArg1][1] = 'STRING'
         
     # GETCHAR
@@ -698,7 +810,7 @@ while True:
         if typeArg2 != "STRING" or typeArg3 != "INT":
             sys.stderr.write("Wrong type of argument\n")
             sys.exit(53)
-        if valueArg3 > len(valueArg2)-1 or valueArg3 < 0:
+        if valueArg3 > len(valueArg2)-1 or valueArg3 < 0: # if index is out of range
             sys.stderr.write("Wrong index\n")
             sys.exit(58)
         variableList[valueArg1][0] = valueArg2[valueArg3]
@@ -724,9 +836,9 @@ while True:
         if valueArg2 < 0 or valueArg2 > lenArg1:
             sys.stderr.write("Wrong index\n")
             sys.exit(58)
-        variableList[valueArg1][0] = string[:valueArg2] + valueArg3[0] + string[valueArg2+1:]
+        variableList[valueArg1][0] = string[:valueArg2] + valueArg3[0] + string[valueArg2+1:] # replace character at index with new character
         
-    instNumToExecute += 1   
+    instrNumToBeExecuted += 1   
     
 
         
